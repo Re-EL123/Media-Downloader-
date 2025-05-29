@@ -4,87 +4,85 @@ document.addEventListener("DOMContentLoaded", () => {
 
 document.getElementById("mediaForm").addEventListener("submit", async function (e) {
   e.preventDefault();
-
   const url = document.getElementById("mediaUrl").value.trim();
-  const resultsDiv = document.getElementById("results");
-  const linksDiv = document.getElementById("downloadLinks");
-  linksDiv.innerHTML = "";
-  resultsDiv.classList.add("hidden");
+  if (!url) return;
 
-  if (!url) {
-    alert("Please enter a URL.");
-    return;
-  }
-
-  const encodedBody = new URLSearchParams();
-  encodedBody.append("url", url);
+  // Clear previous
+  document.getElementById("results").classList.add("hidden");
 
   try {
-    const response = await fetch("https://all-media-downloader5.p.rapidapi.com/download", {
-      method: "POST",
+    // Build fetch URL
+    const apiUrl = new URL(
+      "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi"
+    );
+    apiUrl.searchParams.set("url", url);
+
+    const resp = await fetch(apiUrl.toString(), {
+      method: "GET",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
         "x-rapidapi-key": "82ae10db11mshb41ccacdd991130p108a22jsnf3ae22b94bbd",
-        "x-rapidapi-host": "all-media-downloader5.p.rapidapi.com",
+        "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com",
       },
-      body: encodedBody.toString(),
     });
 
-    const data = await response.json();
-    console.log("API Response:", data);
+    const data = await resp.json();
+    console.log("API response:", data);
 
-    if (!data || !data.medias || data.medias.length === 0) {
-      linksDiv.innerHTML = "<p class='text-red-500'>No media found or unsupported URL.</p>";
-    } else {
-      addToHistory(url);
-      data.medias.forEach((media) => {
-        const link = document.createElement("a");
-        link.href = media.url;
-        link.textContent = `${media.quality || "Unknown"} - ${media.extension}`;
-        link.target = "_blank";
-        link.className = "block text-blue-600 hover:underline";
-        linksDiv.appendChild(link);
-      });
+    if (data.error) {
+      throw new Error("API returned error");
     }
 
-    resultsDiv.classList.remove("hidden");
-  } catch (error) {
-    console.error("Error:", error);
-    linksDiv.innerHTML = "<p class='text-red-500'>An error occurred while fetching media.</p>";
-    resultsDiv.classList.remove("hidden");
+    // Populate UI
+    document.getElementById("thumb").src = data.thumb || "";
+    document.getElementById("caption").textContent = data.caption || "";
+    document.getElementById("duration").textContent = data.duration
+      ? `Duration: ${Math.round(data.duration)}s`
+      : "";
+    const dlBtn = document.getElementById("downloadBtn");
+    dlBtn.href = data.download_url;
+    dlBtn.download = ""; // use the URL filename by default
+
+    document.getElementById("results").classList.remove("hidden");
+    addToHistory(url);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to fetch media. Please check the URL and try again.");
   }
 });
 
 function addToHistory(url) {
-  let history = JSON.parse(localStorage.getItem("downloadHistory")) || [];
+  const key = "downloadHistory";
+  let history = JSON.parse(localStorage.getItem(key)) || [];
+  // Avoid duplicates
   if (!history.includes(url)) {
-    history.unshift(url); // Add to top
-    localStorage.setItem("downloadHistory", JSON.stringify(history));
-    loadHistory();
+    history.unshift(url);
+    if (history.length > 50) history.pop(); // cap to 50
+    localStorage.setItem(key, JSON.stringify(history));
   }
+  loadHistory();
 }
 
 function loadHistory() {
-  const historyList = document.getElementById("historyList");
-  historyList.innerHTML = "";
-  const history = JSON.parse(localStorage.getItem("downloadHistory")) || [];
+  const key = "downloadHistory";
+  const list = document.getElementById("historyList");
+  list.innerHTML = "";
 
-  if (history.length === 0) {
-    historyList.innerHTML = "<li class='text-gray-500'>No download history yet.</li>";
+  const history = JSON.parse(localStorage.getItem(key)) || [];
+  if (!history.length) {
+    list.innerHTML = "<li class='text-gray-500'>No download history yet.</li>";
     return;
   }
 
-  history.forEach((url) => {
+  history.forEach((u) => {
     const li = document.createElement("li");
     const btn = document.createElement("button");
-    btn.textContent = url;
-    btn.className = "text-blue-500 hover:underline truncate w-full text-left";
+    btn.textContent = u;
+    btn.className = "text-blue-500 hover:underline text-left truncate w-full";
     btn.onclick = () => {
-      document.getElementById("mediaUrl").value = url;
+      document.getElementById("mediaUrl").value = u;
       document.getElementById("mediaForm").dispatchEvent(new Event("submit"));
     };
     li.appendChild(btn);
-    historyList.appendChild(li);
+    list.appendChild(li);
   });
-      }
-    
+}
