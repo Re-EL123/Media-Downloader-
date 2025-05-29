@@ -9,15 +9,23 @@
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
   <div class="bg-white shadow-lg rounded-xl p-6 w-full max-w-xl">
     <h1 class="text-2xl font-bold mb-4 text-center">All-in-One Media Downloader</h1>
-    
+
+    <!-- URL Input Form -->
     <form id="mediaForm" class="space-y-4">
       <input type="text" id="mediaUrl" class="w-full p-2 border rounded-lg" placeholder="Enter media URL" required>
       <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">Get Download Links</button>
     </form>
 
+    <!-- Results Display -->
     <div id="results" class="mt-6 space-y-4 hidden">
       <h2 class="text-xl font-semibold">Download Options:</h2>
       <div id="downloadLinks" class="space-y-2"></div>
+    </div>
+
+    <!-- History -->
+    <div id="history" class="mt-10">
+      <h2 class="text-lg font-bold mb-2">Download History</h2>
+      <ul id="historyList" class="list-disc list-inside text-sm text-gray-700 space-y-1"></ul>
     </div>
   </div>
 </body>
