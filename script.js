@@ -1,88 +1,112 @@
-document.addEventListener("DOMContentLoaded", () => {
-  loadHistory();
-});
+const apiEndpoint = 'api.php';  // our PHP proxy
 
-document.getElementById("mediaForm").addEventListener("submit", async function (e) {
-  e.preventDefault();
-  const url = document.getElementById("mediaUrl").value.trim();
-  if (!url) return;
+const $ = sel => document.querySelector(sel);
+const $$ = sel => document.querySelectorAll(sel);
 
-  // Clear previous
-  document.getElementById("results").classList.add("hidden");
+const loading = $('#loading');
+const results = $('#results');
+const preview = $('#preview');
+const captionEl = $('#caption');
+const durationEl = $('#duration');
+const downloadOptions = $('#downloadOptions');
+const historyList = $('#historyList');
+const mediaUrlInput = $('#mediaUrl');
+
+document.addEventListener('DOMContentLoaded', loadHistory);
+$('#fetchBtn').addEventListener('click', fetchMedia);
+
+function setLoading(on) {
+  loading.classList.toggle('hidden', !on);
+}
+
+async function fetchMedia() {
+  const url = mediaUrlInput.value.trim();
+  if (!url) return alert('Please paste a URL.');
+
+  // clear old
+  results.classList.add('hidden');
+  preview.innerHTML = '';
+  downloadOptions.innerHTML = '';
+  captionEl.textContent = '';
+  durationEl.textContent = '';
+
+  setLoading(true);
 
   try {
-    // Build fetch URL
-    const apiUrl = new URL(
-      "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi"
-    );
-    apiUrl.searchParams.set("url", url);
-
-    const resp = await fetch(apiUrl.toString(), {
-      method: "GET",
-      headers: {
-        "x-rapidapi-key": "82ae10db11mshb41ccacdd991130p108a22jsnf3ae22b94bbd",
-        "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com",
-      },
+    const resp = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ url }),
     });
-
     const data = await resp.json();
-    console.log("API response:", data);
+    if (data.error) throw new Error(data.message || 'Unknown API error');
 
-    if (data.error) {
-      throw new Error("API returned error");
+    // Show thumbnail or video
+    if (data.thumb) {
+      preview.innerHTML = `<img src="${data.thumb}" alt="thumb" class="w-full"/>`;
+    } else if (data.download_url) {
+      preview.innerHTML = `<video controls src="${data.download_url}" class="w-full"></video>`;
     }
 
-    // Populate UI
-    document.getElementById("thumb").src = data.thumb || "";
-    document.getElementById("caption").textContent = data.caption || "";
-    document.getElementById("duration").textContent = data.duration
-      ? `Duration: ${Math.round(data.duration)}s`
-      : "";
-    const dlBtn = document.getElementById("downloadBtn");
-    dlBtn.href = data.download_url;
-    dlBtn.download = ""; // use the URL filename by default
+    // Meta
+    captionEl.textContent = data.caption || '';
+    if (data.duration) durationEl.textContent = `Duration: ${Math.round(data.duration)}s`;
 
-    document.getElementById("results").classList.remove("hidden");
+    // Download buttons
+    // Some endpoints return 'qualities', 'formats' or a single download_url.
+    let opts = [];
+    if (data.qualities) {
+      opts = Object.entries(data.qualities).map(([q, link]) => ({ label: q, url: link }));
+    } else if (Array.isArray(data.urls)) {
+      opts = data.urls.map(u => ({ label: 'Download', url: u }));
+    } else if (data.download_url) {
+      opts = [{ label: 'Download (default)', url: data.download_url }];
+    }
+
+    opts.forEach(o => {
+      const btn = document.createElement('a');
+      btn.href = o.url;
+      btn.target = '_blank';
+      btn.download = '';
+      btn.textContent = o.label;
+      btn.className = 'block text-center py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition animate-pulse';
+      downloadOptions.appendChild(btn);
+    });
+
+    results.classList.remove('hidden');
     addToHistory(url);
-  } catch (err) {
-    console.error(err);
-    alert("Failed to fetch media. Please check the URL and try again.");
   }
-});
+  catch (err) {
+    console.error(err);
+    alert('Error fetching media: ' + err.message);
+  }
+  finally {
+    setLoading(false);
+  }
+}
 
 function addToHistory(url) {
-  const key = "downloadHistory";
-  let history = JSON.parse(localStorage.getItem(key)) || [];
-  // Avoid duplicates
-  if (!history.includes(url)) {
-    history.unshift(url);
-    if (history.length > 50) history.pop(); // cap to 50
-    localStorage.setItem(key, JSON.stringify(history));
+  let hist = JSON.parse(localStorage.getItem('downloadHistory')||'[]');
+  if (!hist.includes(url)) {
+    hist.unshift(url);
+    if (hist.length>50) hist.pop();
+    localStorage.setItem('downloadHistory', JSON.stringify(hist));
+    renderHistory();
   }
-  loadHistory();
 }
 
 function loadHistory() {
-  const key = "downloadHistory";
-  const list = document.getElementById("historyList");
-  list.innerHTML = "";
+  renderHistory();
+}
 
-  const history = JSON.parse(localStorage.getItem(key)) || [];
-  if (!history.length) {
-    list.innerHTML = "<li class='text-gray-500'>No download history yet.</li>";
-    return;
-  }
+function renderHistory() {
+  const hist = JSON.parse(localStorage.getItem('downloadHistory')||'[]');
+  historyList.innerHTML = hist.length
+    ? hist.map(u => `<li><button class="hover:underline truncate w-full text-left" onclick="reuse('${u}')">${u}</button></li>`).join('')
+    : '<li class="text-gray-400">No history yet.</li>';
+}
 
-  history.forEach((u) => {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.textContent = u;
-    btn.className = "text-blue-500 hover:underline text-left truncate w-full";
-    btn.onclick = () => {
-      document.getElementById("mediaUrl").value = u;
-      document.getElementById("mediaForm").dispatchEvent(new Event("submit"));
-    };
-    li.appendChild(btn);
-    list.appendChild(li);
-  });
+function reuse(u) {
+  mediaUrlInput.value = u;
+  fetchMedia();
 }
