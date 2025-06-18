@@ -1,19 +1,18 @@
-const apiEndpoint = 'api.php';  // our PHP proxy
+// script.js
+const apiEndpoint = 'api.php';  // PHP proxy
 
-const $ = sel => document.querySelector(sel);
-const $$ = sel => document.querySelectorAll(sel);
-
-const loading = $('#loading');
-const results = $('#results');
-const preview = $('#preview');
-const captionEl = $('#caption');
-const durationEl = $('#duration');
-const downloadOptions = $('#downloadOptions');
-const historyList = $('#historyList');
-const mediaUrlInput = $('#mediaUrl');
+const loading = document.getElementById('loading');
+const results = document.getElementById('results');
+const preview = document.getElementById('preview');
+const captionEl = document.getElementById('caption');
+const durationEl = document.getElementById('duration');
+const downloadOptions = document.getElementById('downloadOptions');
+const historyList = document.getElementById('historyList');
+const mediaUrlInput = document.getElementById('mediaUrl');
+const fetchBtn = document.getElementById('fetchBtn');
 
 document.addEventListener('DOMContentLoaded', loadHistory);
-$('#fetchBtn').addEventListener('click', fetchMedia);
+fetchBtn.addEventListener('click', fetchMedia);
 
 function setLoading(on) {
   loading.classList.toggle('hidden', !on);
@@ -23,7 +22,7 @@ async function fetchMedia() {
   const url = mediaUrlInput.value.trim();
   if (!url) return alert('Please paste a URL.');
 
-  // clear old
+  // Clear old
   results.classList.add('hidden');
   preview.innerHTML = '';
   downloadOptions.innerHTML = '';
@@ -35,32 +34,42 @@ async function fetchMedia() {
   try {
     const resp = await fetch(apiEndpoint, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.message || 'Unknown API error');
 
-    // Show thumbnail or video
+    const text = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error('Invalid JSON:', err, text);
+      return alert('Server returned invalid JSON. See console.');
+    }
+
+    if (data.error) {
+      return alert('Error: ' + (data.message || 'Unknown'));
+    }
+
+    // Preview
     if (data.thumb) {
-      preview.innerHTML = `<img src="${data.thumb}" alt="thumb" class="w-full"/>`;
+      preview.innerHTML = `<img src="${data.thumb}" class="w-full"/>`;
     } else if (data.download_url) {
       preview.innerHTML = `<video controls src="${data.download_url}" class="w-full"></video>`;
     }
 
     // Meta
     captionEl.textContent = data.caption || '';
-    if (data.duration) durationEl.textContent = `Duration: ${Math.round(data.duration)}s`;
+    if (data.duration) {
+      durationEl.textContent = `Duration: ${Math.round(data.duration)}s`;
+    }
 
-    // Download buttons
-    // Some endpoints return 'qualities', 'formats' or a single download_url.
+    // Download options
     let opts = [];
     if (data.qualities) {
       opts = Object.entries(data.qualities).map(([q, link]) => ({ label: q, url: link }));
-    } else if (Array.isArray(data.urls)) {
-      opts = data.urls.map(u => ({ label: 'Download', url: u }));
     } else if (data.download_url) {
-      opts = [{ label: 'Download (default)', url: data.download_url }];
+      opts = [{ label: 'Download', url: data.download_url }];
     }
 
     opts.forEach(o => {
@@ -77,8 +86,8 @@ async function fetchMedia() {
     addToHistory(url);
   }
   catch (err) {
-    console.error(err);
-    alert('Error fetching media: ' + err.message);
+    console.error('Fetch error:', err);
+    alert('Network or server error. See console.');
   }
   finally {
     setLoading(false);
@@ -86,13 +95,13 @@ async function fetchMedia() {
 }
 
 function addToHistory(url) {
-  let hist = JSON.parse(localStorage.getItem('downloadHistory')||'[]');
+  let hist = JSON.parse(localStorage.getItem('downloadHistory') || '[]');
   if (!hist.includes(url)) {
     hist.unshift(url);
-    if (hist.length>50) hist.pop();
+    if (hist.length > 50) hist.pop();
     localStorage.setItem('downloadHistory', JSON.stringify(hist));
-    renderHistory();
   }
+  renderHistory();
 }
 
 function loadHistory() {
@@ -100,10 +109,16 @@ function loadHistory() {
 }
 
 function renderHistory() {
-  const hist = JSON.parse(localStorage.getItem('downloadHistory')||'[]');
-  historyList.innerHTML = hist.length
-    ? hist.map(u => `<li><button class="hover:underline truncate w-full text-left" onclick="reuse('${u}')">${u}</button></li>`).join('')
-    : '<li class="text-gray-400">No history yet.</li>';
+  const hist = JSON.parse(localStorage.getItem('downloadHistory') || '[]');
+  if (!hist.length) {
+    historyList.innerHTML = '<li class="text-gray-400">No history yet.</li>';
+    return;
+  }
+  historyList.innerHTML = hist.map(u =>
+    `<li>
+       <button class="hover:underline truncate w-full text-left" onclick="reuse('${u}')">${u}</button>
+     </li>`
+  ).join('');
 }
 
 function reuse(u) {
